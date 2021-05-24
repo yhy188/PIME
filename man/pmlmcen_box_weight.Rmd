@@ -1,0 +1,377 @@
+---
+title: "pmlmcen"
+author: "haiyan yu"
+date: "7/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+ 
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+
+library(ggridges)
+ library(ggplot2)
+library("ipw")
+#library("pmipw")
+library(cbdpm)
+library("mice")
+library("readxl")
+library(xtable)
+
+nmethods<-4
+####number of methods: BL, PMM, IPW, AIPW
+df.cbd <- read.csv("~/Downloads/Rpkg/cbdpime/CBD/cbd3ypm.csv")
+#df.cbd[df.cbd$a==0,"a"]<-2
+#df.cbd$a<-df.cbd$a-1
+#write.csv(df.cbd,"cbd3ypmip.csv")
+#df.cbd <- read.csv("~/Downloads/Rpkg/cbdpm/man/cbd3ypmip.csv")
+head(df.cbd)
+#names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern")
+#df.cbd$cell <- 2 * (df.cbd$block - 1) + (df.cbd$a + 1)
+#table(df.cbd$cell)
+
+## Bostingtrap
+df.ipw <- df.cbd
+df.ipw <- data.frame(df.ipw)
+
+nid <- nrow(df.ipw)
+nid
+max(df.ipw$id)
+```
+######Density ofoutcomes in three times
+```{r}
+head(df.ipw)
+{
+  plot(density(df.ipw[df.ipw$a==0,"y1b"]))
+ lines(density(df.ipw[df.ipw$a==1,"y1b"]))
+}
+
+```
+
+```{r}
+mean.comp<-seq(1:8)
+mean.comp<-data.frame(mean.comp)
+mean.ipw<-data.frame(mean.comp)
+mean.aipw<-data.frame(mean.comp)
+mean.pmm<-data.frame(mean.comp)
+########################################################
+#M<-1000
+M<-100
+for (i in seq(1:M)) {
+
+  prob <- 0.35
+  bseq <- rbinom(nid, 1, prob)
+  sum(bseq)
+  b3seq <- rep(bseq, 1)
+  sum(b3seq)
+  #rep(1:3, 2)
+  # df.ipw<-df.cbd[rep(1:3,2),]
+  b3seq<-data.frame(b3seq)
+  df.cbd<-data.frame(df.cbd)
+  df.ipw <- df.cbd[df.cbd$id==(df.cbd$id*bseq) , ]
+  nrow(df.cbd)
+  nrow(df.ipw)
+  head(df.ipw)
+
+  head(df.cbd)
+  #names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern","cell")
+  data<-df.ipw
+
+  ########################################################
+  cbdpm.df<-pmlmcen(df.ipw)
+  data<-cbdpm.df
+  data$cell <- 2 * (data$block - 1) + (data$a + 1)
+  table(data$cell)
+  ########################################################
+
+    ########################################################
+  #names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern")
+
+  data.pmm<-pmm(df.ipw)
+    data.pmm$cell <- 2 * (data.pmm$block - 1) + (data.pmm$a + 1)
+   temp<-meancomplete(data.pmm)
+  mean.pmm<-cbind(mean.pmm,temp)
+  
+  ########################################################
+  #names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern")
+
+  temp<-meancomplete(data)
+  mean.comp<-cbind(mean.comp,temp)
+  ########################################################
+  c.weight <- caseweight(data)
+
+    summary(c.weight)
+  #print(c.weight)
+   data$sw <- c.weight
+  ########################################################
+  head(data)
+  temp<-meanipw(data)
+  mean.ipw<-cbind(mean.ipw,temp)
+  ########################################################
+
+  ########################################################
+  mean.rep.bl<-meanrep(data)
+  temp<-meanaipw(data,mean.rep.bl)
+  mean.aipw<-cbind(mean.aipw,temp)
+  ########################################################
+
+}
+#mean.comp
+#mean.ipw
+#mean.aipw
+
+```
+
+```{r}
+  #plot inverse probability weights
+{  graphics.off()
+  dev.new(width = 550, height = 309, unit = "px")
+  ipwplot(
+    weights = data$sw,
+    logscale = FALSE,
+  #  main = "Stabilized weights",
+   # xlim = c(0, 8),
+   xlim = c(0, 8),
+    xlab=c("Case weight"),
+  ylab=c("Density")
+  )
+  abline(v=8, col="black", lwd=2, lty=2)
+  legend("top", legend=c("Weights", "cut-off"),
+     col=c("black", "black"), lty=c(1,2), cex=1.0)
+  # Add legend to top right, outside plot region
+ # legend("topright", inset=c(-0.2,0), legend=c("Weights", "cut-off"),
+ #        col=c("black", "red"), lty=c(1,4), cex=0.8 )
+  grid()
+  }
+```
+
+
+```{r}
+
+ggplot(data, aes(x = sw, y =as.factor(a), fill = as.factor(a))) + 
+   geom_density_ridges(scale = 4) + 
+   scale_fill_cyclical(
+     name = "Fill colors",
+     values = c("blue", "green"),
+     labels = c("Fair" = "blue", "Good" = "green"),
+     guide = "legend"
+   )
+
+a <- ggplot(data, aes(x = sw))+ geom_density(aes(fill = as.factor(a)), alpha = 0.4) 
+a
+```
+
+```{r}
+mse.res<-data.frame()
+mean.res<-data.frame()
+var.res<-data.frame()
+bias2.res<-data.frame()
+
+bfdfgroup<-data.frame()
+
+
+
+for(i in seq(1:nmethods)){
+  if(i==1){
+    df.mse<-mean.comp
+  }else if(i==2){
+    df.mse<-mean.pmm
+  }else if(i==3){
+    df.mse<-mean.ipw
+  }else{
+    df.mse<-mean.aipw
+  }
+  mean.mcomp<-mean(as.matrix(df.mse[7,]))
+  var.mcomp<-mean(as.matrix(df.mse[8,]))
+
+  #bias2<-sum(as.matrix(mean.comp[7,])-mean.mcomp)^2/(6-1)
+  bias2<-var(as.numeric(df.mse[7,]))
+  mse<-var.mcomp+(1+1/M)*bias2
+  mse.res<-rbind(mse.res,mse)
+  mean.res<-rbind(mean.res,mean.mcomp)
+  var.res<-rbind(var.res,var.mcomp)
+  bias2.res<-rbind(bias2.res,bias2)
+  {
+    bfdf<-t(df.mse[c(1:6),-1])
+    bfdf<-data.frame(bfdf)
+    names(bfdf)<-c("1","2","3","4","5","6")
+    boxplot(bfdf,ylim=range(4:12),
+            ylab="mean responses", xlab="Group")
+    grid()
+  }
+ # print(bplot)
+  bfdf$group<-i
+  #####
+
+  bfdfgroup<-rbind(bfdfgroup,bfdf)
+}
+head(bfdfgroup)
+plotcbdcen(bfdfgroup)+ theme_bw()+ scale_fill_discrete(name="Methods",
+                           breaks=seq(1:4),
+                           labels=c("PMBL", "PMM","PIME-I", "PIME"))+
+    theme(text = element_text(size=16))
+dev.new(width = 350, height = 209, unit = "px", cex.lab=2.5, cex.axis=2.5)
+cbdcen<-plotcbdcen(bfdfgroup)+ theme_bw()+ scale_fill_discrete(name="Methods",
+                           breaks=seq(1:4),
+                           labels=c("PMBL", "PMM","PIME-I", "PIME"))+
+    theme(text = element_text(size=16))
+ggsave(
+  "cbdcen.pdf",width =5.6,height =4)
+```
+
+```{r}
+bfdfdetg<-bfdfgroup[,c(4:7)]
+n<-nrow(bfdfgroup)
+names(bfdfdetg)<-c("tau1","tau2","tau3","group")
+  bfdfdetg$tau1<-bfdfgroup[,"2"]-bfdfgroup[,"1"]
+  bfdfdetg$tau2<-bfdfgroup[,"4"]-bfdfgroup[,"3"]
+  bfdfdetg$tau3<-bfdfgroup[,"6"]-bfdfgroup[,"5"]
+    #bfdfdetg$group<-bfdfdet$group
+head(bfdfdetg)
+
+#write.csv(bfdfdetg,"bfdfdetg.csv")
+#detplotdf<-bfdfdetg[,c(7:10)]
+detplotdf<-data.frame("1","2","3")
+names(detplotdf)<-c("tau","treatment","t")
+for (i in seq(1:3)) {
+  if (i==1) {
+      detplotdf[c(1:400), "tau"]<-bfdfdetg$tau1
+       detplotdf[c(1:400), "treatment"]<-bfdfdetg$group
+        detplotdf[c(1:400), "t"]<-i
+  } else if (i==2){
+      detplotdf[c(401:800), "tau"]<-bfdfdetg$tau2
+       detplotdf[c(401:800), "treatment"]<-bfdfdetg$group
+       detplotdf[c(401:800), "t"]<-i
+  } else{
+      detplotdf[c(801:1200), "tau"]<-bfdfdetg$tau3
+       detplotdf[c(801:1200), "treatment"]<-bfdfdetg$group
+       detplotdf[c(801:1200), "t"]<-i
+  }
+}
+detplotdf<-data.frame(detplotdf)
+dev.new(width = 350, height = 209, unit = "px", cex.lab=2.5, cex.axis=2.5)
+
+detplot<-ggplot(detplotdf, aes(x=factor(t), y=as.numeric(tau), fill=factor(treatment))) + 
+    geom_boxplot() + theme_bw()+ scale_fill_discrete(name="Methods",
+                           breaks=seq(1:4),
+                           labels=c("PMBL", "PMM","PIME-I", "PIME"))+
+    theme(text = element_text(size=16))+ labs(x = "Measurement time", y="Treatment effect")
+detplot
+ggsave(
+  "detplot.pdf",width =5.6,height =4)
+
+```
+
+
+```{r}
+res<-cbind(mean.res,mse.res,var.res,bias2.res)
+names(res)<-c("mean","mse","var","bias2")
+res
+#barplot(seq(1:3),mse.res)
+xtable(res,digits=c(3))
+```
+```{r}
+#head(mean.comp)
+tvar.avg<-data.frame()
+for (i in seq(1:nmethods)) {
+  if(i==1){
+    df.aov<-mean.comp[1:6,]
+  }else if(i==2){
+    df.aov<-mean.pmm[1:6,]
+  }else if(i==3){
+    df.aov<-mean.ipw[1:6,]
+  }else{
+     df.aov<-mean.aipw[1:6,]
+  }
+df.aov<-data.frame(df.aov)
+df.aov$block<-(df.aov$mean.comp-1)%/%2+1
+df.aov$treatment<-(df.aov$mean.comp-1)%%2  
+
+tvar.df<-data.frame()
+
+for (m in seq(1:M)) {
+  ncol<-ncol(df.aov)
+  dffit<-df.aov[,c(m+1,ncol-1,ncol)]
+  names(dffit)<-c("y","block","treatment")
+  lm.aov<-lm(y~.,data = dffit)
+  sumdf<-summary(lm.aov)
+  tvar<-(sumdf$coefficients[3,2])^2
+  tvar.df<-rbind(tvar.df,tvar)
+  names(tvar.df)<-c("var")
+  temp<-mean(as.numeric(tvar.df$var))
+}
+
+tvar.avg<-rbind(tvar.avg,temp)
+
+
+}
+names(tvar.avg)<-c("var")
+```
+
+```{r}
+res<-cbind(mean.res,mse.res,var.res,bias2.res,
+           tvar.avg,bias2.res+tvar.avg, (bias2.res+tvar.avg)^0.5)
+names(res)<-c("mean","mse","var","bias2","tvar.avg","MSE","s")
+res
+#barplot(seq(1:3),mse.res)
+library(xtable)
+xtable(res[,c(1,4,5,6,7)],digits=c(3))
+```
+
+
+```{r}
+#ggridges
+#https://rstudio-pubs-static.s3.amazonaws.com/228019_f0c39e05758a4a51b435b19dbd321c23.html
+
+ library(ggplot2)
+library(ggridges)
+head(data)
+data2<-data
+data2[data2$a==0,"a"]<-"Insulin"
+data2[data2$a==1,"a"]<-"Placebo"
+pp<-ggplot(data2[data2$sw<=10,], aes(x = sw, y =as.factor(a), fill = as.factor(a)))+ 
+   scale_fill_cyclical(
+     name = "Group",
+     values = c("red", "lightblue"),
+     labels = c("0" = "Insulin", "1" = "Placebo")  
+     #,guide = "legend"
+   )+xlim(1,10)+ 
+    geom_density_ridges(
+    jittered_points = TRUE,
+    position = position_points_jitter(width = 0.05, height = 0),
+    point_shape = '|', point_size = 3, point_alpha = 1, alpha = 0.5,
+    # alpha = 0.5,perspecitive, 
+        aes(point_color =a )#c("blue","green");as.factor(a+5)
+  )+  
+  xlab("Case weight") + ylab("Group")+ theme_bw()+
+    theme(text = element_text(size=16),legend.text = element_blank())
+
+protate<-pp+ coord_flip()+theme(legend.text = element_blank())
+#protate<-pp+ coord_flip()+theme(legend. title = element_blank()) 
+#Introduction to ggridges
+pp+xlim(c(1, NA)) +theme(legend.text = element_blank())+xlim(1,10)
+
+###Portiait,
+ggsave(
+  "caseweight.pdf",width =5,height =4)
+pp
+#pp+ geom_vline(xintercept = c(1.14,8))+geom_line(linetype="dashed")
+#protate
+```
+
+#size
+
+legnth
+```{r}
+nrow(data[data$sw<=3&data$sw>1.49,])
+df<- data[data$sw<=3&data$sw>1.49,]
+table(df$a)
+```

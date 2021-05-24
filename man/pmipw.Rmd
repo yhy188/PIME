@@ -1,0 +1,235 @@
+---
+title: "PIME"
+author: "haiyan yu"
+date: "7/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+ 
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r  , echo=FALSE}
+
+
+
+library("ipw")
+#library("pmipw")
+library(cbdpm)
+library("mice")
+library("readxl")
+library(xtable)
+
+
+df.cbd <- read.csv("~/Downloads/Rpkg/cbdpm/CBD/xu905_cbddf.csv")
+head(df.cbd)
+df.cbd$cell <- 2 * (df.cbd$block - 1) + (df.cbd$A + 1)
+table(df.cbd$cell)
+
+## Bostingtrap
+df.ipw <- df.cbd
+df.ipw <- data.frame(df.ipw)
+
+head(df.ipw)
+nid <- sum(df.ipw$block == 1)
+nid
+```
+
+```{r}
+mean.comp<-seq(1:8)
+mean.comp<-data.frame(mean.comp)
+mean.ipw<-data.frame(mean.comp)
+mean.aipw<-data.frame(mean.comp)
+########################################################
+M<-1000
+for (i in seq(1:M)) {
+
+prob <- 0.35
+bseq <- rbinom(nid, 1, prob)
+sum(bseq)
+b3seq <- rep(bseq, 3)
+sum(b3seq)
+rep(1:3, 2)
+# df.ipw<-df.cbd[rep(1:3,2),]
+b3seq<-data.frame(b3seq)
+df.cbd<-data.frame(df.cbd)
+df.ipw <- df.cbd[df.cbd$id==(df.cbd$id*bseq) , ]
+nrow(df.cbd)
+nrow(df.ipw)
+head(df.ipw)
+
+head(df.cbd)
+names(df.ipw)<-c("id","x1","x2","x3","a","y","block","cell")
+c.weight <- caseweight(df.ipw)
+
+summary(c.weight)
+#print(c.weight)
+df.ipw$sw <- c.weight
+head(df.ipw)
+data<-df.ipw
+########################################################
+temp<-meancomplete(df.ipw)
+mean.comp<-cbind(mean.comp,temp)
+########################################################
+
+########################################################
+temp<-meanipw(df.ipw)
+mean.ipw<-cbind(mean.ipw,temp)
+########################################################
+
+########################################################
+mean.rep.bl<-meanrep(df.ipw)
+temp<-meanaipw(df.ipw,mean.rep.bl)
+mean.aipw<-cbind(mean.aipw,temp)
+########################################################
+
+}
+#mean.comp
+#mean.ipw
+#mean.aipw
+```
+
+```{r}
+  #plot inverse probability weights
+{  graphics.off()
+  ipwplot(
+    weights = data$sw,
+    logscale = FALSE,
+  #  main = "Stabilized weights",
+    xlim = c(0, 8),
+    xlab=c("Case weight")
+  )
+  abline(v=2, col="red", lwd=2, lty=4)
+  grid()
+  }
+```
+
+
+```{r}
+mse.res<-data.frame()
+mean.res<-data.frame()
+var.res<-data.frame()
+bias2.res<-data.frame()
+
+bfdfgroup<-data.frame()
+
+for(i in seq(1:3)){
+  if(i==1){
+    df.mse<-mean.comp
+  }else if(i==2){
+    df.mse<-mean.ipw
+  }else{
+    df.mse<-mean.aipw
+  }
+  mean.mcomp<-mean(as.matrix(df.mse[7,]))
+  var.mcomp<-mean(as.matrix(df.mse[8,]))
+
+  #bias2<-sum(as.matrix(mean.comp[7,])-mean.mcomp)^2/(6-1)
+  bias2<-var(as.numeric(df.mse[7,]))
+  mse<-var.mcomp+(1+1/M)*bias2
+  mse.res<-rbind(mse.res,mse)
+  mean.res<-rbind(mean.res,mean.mcomp)
+  var.res<-rbind(var.res,var.mcomp)
+  bias2.res<-rbind(bias2.res,bias2)
+  {
+    bfdf<-t(df.mse[c(1:6),-1])
+    bfdf<-data.frame(bfdf)
+    names(bfdf)<-c("1","2","3","4","5","6")
+   bplot<- boxplot(bfdf,ylim=range(4:12),
+            ylab="mean responses", xlab="Group")
+    grid()
+  }
+ # print(bplot)
+  bfdf$group<-i
+  bfdfgroup<-rbind(bfdfgroup,bfdf)
+}
+head(bfdfgroup)
+plotcbd(bfdfgroup)
+```
+
+##Mean responses and sd
+```{r}
+mean.cell<-data.frame()
+sd.cell<-data.frame()
+
+for (bi  in seq(1:6)) {
+  df.cell<-bfdfgroup[,bi]
+  temp.m<-mean(df.cell)
+  temp.sd<-sd(df.cell)
+  mean.cell<-rbind(mean.cell,temp.m)
+  sd.cell<-rbind(sd.cell,temp.sd)
+}
+meansd.cell<-cbind(round(mean.cell,3),round(sd.cell,3))
+names(meansd.cell)<-c("mean","sd")
+meansd.cell
+```
+
+```{r}
+#head(mean.comp)
+tvar.avg<-data.frame()
+for (i in seq(1:3)) {
+  if(i==1){
+    df.aov<-mean.comp[1:6,]
+  }else if(i==2){
+    df.aov<-mean.ipw[1:6,]
+  }else{
+     df.aov<-mean.aipw[1:6,]
+  }
+df.aov<-data.frame(df.aov)
+df.aov$block<-(df.aov$mean.comp-1)%/%2+1
+df.aov$treatment<-(df.aov$mean.comp-1)%%2  
+
+tvar.df<-data.frame()
+
+for (m in seq(1:M)) {
+  ncol<-ncol(df.aov)
+  dffit<-df.aov[,c(m+1,ncol-1,ncol)]
+  names(dffit)<-c("y","block","treatment")
+  lm.aov<-lm(y~.,data = dffit)
+  sumdf<-summary(lm.aov)
+  tvar<-(sumdf$coefficients[3,2])^2
+  tvar.df<-rbind(tvar.df,tvar)
+  names(tvar.df)<-c("var")
+  temp<-mean(as.numeric(tvar.df$var))
+}
+
+tvar.avg<-rbind(tvar.avg,temp)
+
+
+}
+names(tvar.avg)<-c("var")
+```
+
+```{r}
+res<-cbind(mean.res,mse.res,var.res,bias2.res,
+           tvar.avg,bias2.res+tvar.avg, (bias2.res+tvar.avg)^0.5)
+names(res)<-c("mean","mse","var","bias2","tvar.avg","MSE","s")
+res
+#barplot(seq(1:3),mse.res)
+library(xtable)
+xtable(res[,c(1,4,5,6,7)],digits=c(3))
+```
+
+
+##Bootstrap
+```{r}
+library(boot)
+ gravity<-data.frame(bfdfgroup)
+ gravity<-gravity[,c(1,7)]
+ head(gravity)
+ ratio <- function(d, w)  {
+   mean(d$x * w)
+ }
+ names(gravity)<-c("x","w")
+boot((gravity), ratio, R = 999,stype = "f")
+
+
+
+```

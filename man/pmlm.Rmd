@@ -1,0 +1,172 @@
+---
+title: "pmlm"
+author: "haiyan yu"
+date: "7/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+ 
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+
+
+
+library("ipw")
+#library("pmipw")
+library(cbdpm)
+library("mice")
+library("readxl")
+library(xtable)
+
+
+df.cbd <- read.csv("~/Downloads/Rpkg/cbdpm/CBD/cbd3ypm.csv")
+head(df.cbd)
+#names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern")
+#df.cbd$cell <- 2 * (df.cbd$block - 1) + (df.cbd$a + 1)
+#table(df.cbd$cell)
+
+## Bostingtrap
+df.ipw <- df.cbd
+df.ipw <- data.frame(df.ipw)
+
+head(df.ipw)
+nid <- nrow(df.ipw)
+nid
+```
+
+```{r}
+mean.comp<-seq(1:8)
+mean.comp<-data.frame(mean.comp)
+mean.ipw<-data.frame(mean.comp)
+mean.aipw<-data.frame(mean.comp)
+########################################################
+M<-1000
+for (i in seq(1:M)) {
+
+  prob <- 0.35
+  bseq <- rbinom(nid, 1, prob)
+  sum(bseq)
+  b3seq <- rep(bseq, 1)
+  sum(b3seq)
+  #rep(1:3, 2)
+  # df.ipw<-df.cbd[rep(1:3,2),]
+  b3seq<-data.frame(b3seq)
+  df.cbd<-data.frame(df.cbd)
+  df.ipw <- df.cbd[df.cbd$id==(df.cbd$id*bseq) , ]
+  nrow(df.cbd)
+  nrow(df.ipw)
+  head(df.ipw)
+
+  head(df.cbd)
+  #names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern","cell")
+  data<-df.ipw
+
+  ########################################################
+  cbdpm.df<-pmlm(df.ipw)
+  data<-cbdpm.df
+  data$cell <- 2 * (data$block - 1) + (data$a + 1)
+  table(data$cell)
+  ########################################################
+
+  ########################################################
+  #names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern")
+
+  temp<-meancomplete(data)
+  mean.comp<-cbind(mean.comp,temp)
+  ########################################################
+  c.weight <- caseweight(data)
+
+    summary(c.weight)
+  #print(c.weight)
+   data$sw <- c.weight
+  ########################################################
+  head(data)
+  temp<-meanipw(data)
+  mean.ipw<-cbind(mean.ipw,temp)
+  ########################################################
+
+  ########################################################
+  mean.rep.bl<-meanrep(data)
+  temp<-meanaipw(data,mean.rep.bl)
+  mean.aipw<-cbind(mean.aipw,temp)
+  ########################################################
+
+}
+#mean.comp
+#mean.ipw
+#mean.aipw
+
+```
+
+```{r}
+  #plot inverse probability weights
+{  graphics.off()
+  ipwplot(
+    weights = data$sw,
+    logscale = FALSE,
+  #  main = "Stabilized weights",
+    xlim = c(0, 8),
+    xlab=c("Case weight")
+  )
+  abline(v=2, col="red", lwd=2, lty=4)
+  grid()
+  }
+```
+
+```{r}
+mse.res<-data.frame()
+mean.res<-data.frame()
+var.res<-data.frame()
+bias2.res<-data.frame()
+
+bfdfgroup<-data.frame()
+
+for(i in seq(1:3)){
+  if(i==1){
+    df.mse<-mean.comp
+  }else if(i==2){
+    df.mse<-mean.ipw
+  }else{
+    df.mse<-mean.aipw
+  }
+  mean.mcomp<-mean(as.matrix(df.mse[7,]))
+  var.mcomp<-mean(as.matrix(df.mse[8,]))
+
+  #bias2<-sum(as.matrix(mean.comp[7,])-mean.mcomp)^2/(6-1)
+  bias2<-var(as.numeric(df.mse[7,]))
+  mse<-var.mcomp+(1+1/M)*bias2
+  mse.res<-rbind(mse.res,mse)
+  mean.res<-rbind(mean.res,mean.mcomp)
+  var.res<-rbind(var.res,var.mcomp)
+  bias2.res<-rbind(bias2.res,bias2)
+  {
+    bfdf<-t(df.mse[c(1:6),-1])
+    bfdf<-data.frame(bfdf)
+    names(bfdf)<-c("1","2","3","4","5","6")
+    boxplot(bfdf,ylim=range(4:12),
+            ylab="mean responses", xlab="Group")
+    grid()
+  }
+ # print(bplot)
+  bfdf$group<-i
+  bfdfgroup<-rbind(bfdfgroup,bfdf)
+}
+head(bfdfgroup)
+plotcbd(bfdfgroup)
+```
+
+```{r}
+res<-cbind(mean.res,mse.res,var.res,bias2.res)
+names(res)<-c("mean","mse","var","bias2")
+res
+#barplot(seq(1:3),mse.res)
+xtable(res,digits=c(3))
+```

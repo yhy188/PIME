@@ -1,0 +1,184 @@
+---
+title: "pime_weight"
+author: "haiyan yu"
+date: "12/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setting w for cutoff
+ 
+```{r, include=FALSE, warning=FALSE}
+
+
+
+library("ipw")
+#library("pmipw")
+library(cbdpm)
+library("mice")
+library("readxl")
+library(xtable)
+
+
+df.cbd <- read.csv("~/Downloads/Rpkg/cbdpime/CBD/xu905_cbddf.csv")
+head(df.cbd)
+nrow((df.cbd))
+df.cbd$cell <- 2 * (df.cbd$block - 1) + (df.cbd$A + 1)
+table(df.cbd$cell)
+
+## Bostingtrap
+df.ipw <- df.cbd
+df.ipw <- data.frame(df.ipw)
+
+head(df.ipw)
+nid <- sum(df.ipw$block == 1)
+nid
+```
+ 
+
+
+```{r, include=FALSE, warning=FALSE}
+#M<-1000
+M=2
+for (i in seq(1:M)) {
+
+prob <- 0.35
+bseq <- rbinom(nid, 1, prob)
+sum(bseq)
+b3seq <- rep(bseq, 3)
+sum(b3seq)
+rep(1:3, 2)
+# df.ipw<-df.cbd[rep(1:3,2),]
+b3seq<-data.frame(b3seq)
+df.cbd<-data.frame(df.cbd)
+df.ipw <- df.cbd[df.cbd$id==(df.cbd$id*bseq) , ]
+nrow(df.cbd)
+nrow(df.ipw)
+head(df.ipw)
+
+head(df.cbd)
+names(df.ipw)<-c("id","x1","x2","x3","a","y","block","cell")
+c.weight <- caseweight(df.ipw)
+
+summary(c.weight)
+#print(c.weight)
+df.ipw$sw <- c.weight
+head(df.ipw)
+data<-df.ipw
+
+}
+
+head(data)
+nrow((data))
+```
+
+
+
+
+```{r, include=FALSE, warning=FALSE}
+
+wdf<-data.frame()
+#for (w in seq(1.1, 10, 0.1))
+ for (w in seq(1, 10, 0.1)) 
+{
+  
+  datadt<-data[data$sw>=min(w, w/(w-1)) &data$sw< max(w, w/(w-1)),]
+  mean(data$y)
+  
+  meano<-apply(datadt, 2, mean)
+  sdo<-apply(datadt, 2, sd)
+  
+  meanw<-apply(datadt, 2, weighted.mean,w=datadt$sw)
+  #sdw<-sum(datadt$y*datadt$sw)/sum(datadt$sw)
+#  sdw<-sqrt( (sum(datadt$y*datadt$sw-meanw[6])^2)/sum(datadt$sw))
+    sdw<-sqrt(sqrt( mean((datadt$y*datadt$sw-meanw[6])^2)))
+    size<-length(datadt$sw)
+    tsize<-nrow(datadt[datadt$a==1,])
+    csize<-nrow(datadt[datadt$a==0,])
+  temp<-c(w,meano[6],sdo[6],meanw[6],sdw,size,tsize,csize)
+  wdf<-rbind(wdf,temp)
+  wdf<-round(wdf,4)
+}
+head(wdf)
+names(wdf)<-c("w","meano","sdo","meanw","sdw","size","tsize","csize")
+```
+
+
+```{r}
+
+{
+  plot(log(wdf$sdw),ylim = range(0,2), cex=1.5)
+  lines(log(wdf$sdw),lty=2,pch=2,col=2, cex=1.5)
+   lines(log(wdf$sdo),lty=3,pch=3,col=3, cex=1.5)
+  lines(log (log(wdf$size)),lty=4,pch=4,col=4, cex=1.5)
+#plotxy(w,wdf$sdw)
+grid()
+}
+
+ pdf(file = "sdcweight.pdf",   # The directory you want to save the file in
+    width = 4.6, # The width of the plot in inches
+    height = 4) # The height of the plot in inches
+ #plot(wdf$size)
+{
+  plot(wdf$w,log(wdf$sdw),ylim = range(0,2), xlab="Setting of w", ylab = "Standard deviation",pch=20,col=2, cex=0.5)
+  lines(wdf$w,log(wdf$sdw),lty=2,pch=20,col=2, lwd = 2.3, cex=0.5)
+   lines(wdf$w,log(wdf$sdo),lty=3,pch=3,col=3, lwd = 2.3, cex=0.5)
+      points(wdf$w,log(wdf$sdo),lty=3,pch=3,col=3, lwd = 2.3, cex=0.5)
+       abline(v = c(1.49,3), col="blue", lwd=2, lty=2, cex=0.5)
+ #   abline(v = c(1.14,8), col="blue", lwd=2, lty=2, cex=1.5)
+#    abline(v = c(4,90), col="red", lwd=2, lty=2)
+ # lines(log (log(wdf$size)),lty=4,pch=4,col=4, aix=2)
+#plotxy(w,wdf$sdw)
+    legend("bottomright", legend=c("Unadjusted", "Weigthed"),
+       col=c(2, 3), lty=c(2,3), cex=0.8, lwd=c(2,3), pch=c(20,3))
+grid()
+}
+
+dev.off()
+ #plot(wdf$size)
+ 
+{
+  plot(wdf$w, log(wdf$size),ylim = range(0,7), xlab="Setting of w", ylab = "Logarithm of sample size, lg(N)",pch=20, cex=1.5)
+#  lines(log(wdf$sdw),lty=2,pch=2,col=2)
+#   lines(log(wdf$sdo),lty=3,pch=3,col=3)
+ lines(wdf$w, (log(wdf$size)),lty=4,pch=4,col=4, aix=2, lwd = 2.3, cex=1.5)
+ abline(v = c(1.14,8), col="blue", lwd=2, lty=2, cex=1.5)
+#  abline(v = c(4,90), col="red", lwd=2, lty=2)
+#plotxy(w,wdf$sdw)
+grid()
+}
+
+
+```
+
+
+
+```{r}
+{pdf(file = "sizecweight.pdf",   # The directory you want to save the file in
+    width = 4.6, # The width of the plot in inches
+    height = 4) # The height of the plot in inches
+
+  plot(wdf$w, log(wdf$size),ylim = range(0,7),xlim = range(1,10), xlab="Setting of w", ylab = "Logarithm of sample size, lg(N)",pch=20, col=4,cex=0.4)
+#  lines(log(wdf$sdw),lty=2,pch=2,col=2)
+#   lines(log(wdf$sdo),lty=3,pch=3,col=3)
+ lines(wdf$w, (log(wdf$size)),lty=4,pch=4,col=4, aix=2, lwd = 2.3, cex=1.5)
+ 
+ lines(wdf$w, (log(wdf$tsize)),lty=2,pch=3,col=3, aix=2, lwd = 2.3, cex=1.5)
+  lines(wdf$w, (log(wdf$csize)),lty=1,pch=2,col=2, aix=2, lwd = 2.3, cex=1.5)
+ abline(v = c(1.49,3), col="blue", lwd=2, lty=2, cex=1.5)
+#  abline(v = c(4,90), col="red", lwd=2, lty=2)
+#plotxy(w,wdf$sdw)
+  legend("bottomright", legend=c("Pooled", "Placebo","Insulin"),
+       col=c(4,3, 2), lty=c(4,2, 1), cex=0.8, lwd=c(2.3,2.3,2.3))#, pch=c(4,3, 2)
+grid()
+
+dev.off()
+}
+wdf$size[1]
+log2(wdf$size[1])
+log(wdf$size[1],exp(1))
+
+```

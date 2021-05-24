@@ -1,0 +1,130 @@
+---
+title: "pmlm_pime"
+author: "haiyan yu"
+date: "10/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE}
+
+
+
+library("ipw")
+#library("pmipw")
+library(cbdpm)
+library("mice")
+library("readxl")
+library(xtable)
+
+nmethods<-4
+####number of methods: BL, PMM, IPW, AIPW
+df.cbd <- read.csv("~/Downloads/Rpkg/cbdpm/CBD/cbd3ypm.csv")
+head(df.cbd)
+#names(df.ipw)<-c("id","x1","x2","x3","a","y","block","pattern")
+#df.cbd$cell <- 2 * (df.cbd$block - 1) + (df.cbd$a + 1)
+#table(df.cbd$cell)
+
+## Bostingtrap
+df.ipw <- df.cbd
+df.ipw <- data.frame(df.ipw)
+
+nid <- nrow(df.ipw)
+nid
+max(df.ipw$id)
+```
+######Density ofoutcomes in three times
+```{r}
+head(df.ipw)
+{
+  plot(density(df.ipw[df.ipw$a==0,"y1b"]))
+ lines(density(df.ipw[df.ipw$a==1,"y1b"]))
+}
+
+```
+
+
+```{r}
+#https://cran.r-project.org/web/packages/ggridges/vignettes/introduction.html
+library(ggplot2)
+library(ggridges)
+ggplot(df.ipw[complete.cases(df.ipw),]
+       , aes(x = y1b, y =  as.factor(a))) +
+  geom_density_ridges(
+    jittered_points = TRUE,
+    position = position_points_jitter(width = 0.05, height = 0),
+    point_shape = '|', point_size = 3, point_alpha = 1, alpha = 0.7,
+  )
+
+
+ggplot(df.ipw[complete.cases(df.ipw),], aes(x = y1b, y =as.factor(a), fill = as.factor(a))) + 
+   geom_density_ridges(scale = 4) + 
+   scale_fill_cyclical(
+     name = "Fill colors",
+     values = c("blue", "green"),
+     labels = c("Fair" = "blue", "Good" = "green"),
+     guide = "legend"
+   )
+
+```
+
+
+````{r}
+head(df.ipw)
+df.ipwcell<-data.frame()
+#df.ipwcell<-data.frame(df.ipw)
+tempdf1<-df.ipw
+tempdf1$y<-tempdf1$y1b
+tempdf1$time<-("t")
+#tempdf4<-tempdf1[1:10,]
+#tempdf4$time<-(3)
+tempdf2<-df.ipw
+tempdf2$y<-tempdf1$y2b
+tempdf2$time<-("t+1")
+tempdf3<-df.ipw
+tempdf3$y<-tempdf1$y3b
+tempdf3$time<-("t+2")
+
+# df.ipwcell<-rbind(tempdf1,tempdf2,tempdf3,tempdf4)
+ df.ipwcell<-rbind(tempdf1,tempdf2,tempdf3)
+ 
+head(df.ipwcell)
+nrow(df.ipw)
+nrow(df.ipwcell)
+```
+
+```{r}
+
+df.ipwcell$Points<-"Insulin"
+df.ipwcell[df.ipwcell$a==1,"Points"]<-"Placebo"
+ library(ggplot2)
+library(ggridges)
+pp<-ggplot(df.ipwcell[complete.cases(df.ipwcell),], aes(x = y, y =as.factor(time), fill = as.factor(a),ylim(-0.1,4.2)))+ 
+   scale_fill_cyclical(
+     name = "Group",
+ #    values = c("blue", "green"),
+     values = c( "blue","red"),
+     labels = c("1" = "Placebo","0" = "Insulin"),
+     guide = "legend"
+   )+ 
+    geom_density_ridges(
+    jittered_points = TRUE,
+    position = position_points_jitter(width = 0.05, height = 0),
+    point_shape = '|', point_size = 3, point_alpha = 1, alpha = 0.5,
+    # alpha = 0.5,perspecitive, 
+        aes(point_color =Points ,point_fill =Points)#c("blue","green");as.factor(a+5)
+  )+  
+  xlab("Blood sugar level(mmol/L)") + ylab("Time (hour)")+ theme_bw()+
+    theme(text = element_text(size=16))
+
+protate<-pp+ coord_flip()
+#Introduction to ggridges
+pp#+ylim((0, 3)) #y:disctrete
+ggsave(
+  "pp.pdf",width =5.6,height =4.5)
+protate
+```
